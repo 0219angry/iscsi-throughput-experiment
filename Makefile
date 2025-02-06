@@ -2,7 +2,7 @@
 CC = gcc
 
 # compile options
-CFLAGS = -Wall -Wextra -O2 -Iinclude
+CFLAGS = -Wall -Wextra -O2 -Iinclude -Iinclude/libiscsi
 
 # link options
 LDFLAGS = -Llib -lm
