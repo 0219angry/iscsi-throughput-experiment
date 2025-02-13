@@ -1,0 +1,6 @@
+{
+  "files.associations": {
+    "iscsi.h": "c",
+    "scsi-lowlevel.h": "c"
+  }
+}
