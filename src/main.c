@@ -1,5 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+
 #include <poll.h>
 
 #include "libiscsi/iscsi.h"
@@ -9,6 +13,9 @@
 #include "client.h"
 #include "callback.h"
 
+#include "log.h"
+#define UNUSED(x) ((void)x)
+
 #define IQN_CLIENT "iqn.2025-02.local:client01"
 
 #define TARGET "192.168.0.26:3260"
@@ -16,6 +23,9 @@
 
 
 int main(int argc, char const *argv[]) {
+  UNUSED(argc);
+  UNUSED(argv);
+
   struct iscsi_context *iscsi;
   struct pollfd pfd;
   struct client_state clnt;
@@ -24,22 +34,42 @@ int main(int argc, char const *argv[]) {
 
   iscsi = iscsi_create_context(IQN_CLIENT);
   if (iscsi == NULL) {
-    printf("Failed to create context: %s\n",IQN_CLIENT);
+    LOG("Failed to create context: %s",IQN_CLIENT);
     exit(EXIT_FAILURE);
   }
 
   if (iscsi_set_alias(iscsi, "client01") != 0) {
-    printf("Failed to set alias\n", iscsi->initiator_name);
+    LOG("Failed to set alias: %s", iscsi->initiator_name);
     exit(EXIT_FAILURE);
   }
+
+  clnt.state = STATE_INIT;
 
   clnt.message = "iSCSI throughput test";
   clnt.has_discovered_target = 0;
   if (iscsi_connect_async(iscsi, TARGET, discoveryconnect_cb, &clnt) != 0) {
-    printf("iSCSI failed to connect. %s\n",iscsi_get_error(iscsi));
+    LOG("iSCSI failed to connect. %s",iscsi_get_error(iscsi));
     exit(EXIT_FAILURE);
   }
 
+  clnt.state = STATE_CONNECTING;
+
+
+  // loop for writing
+  while (clnt.state != STATE_DONE) {
+    pfd.fd = iscsi_get_fd(iscsi);
+    pfd.events = iscsi_which_events(iscsi);
+
+    if (poll(&pfd, 1, -1) < 0) {
+      LOG("Poll failed.");
+      exit(EXIT_FAILURE);
+    }
+
+    if(iscsi_service(iscsi, pfd.events) < 0) {
+      LOG("iscsi_service failed with : %s", iscsi_get_error(iscsi));
+      break;
+    }
+  }
   // free resources
 	iscsi_destroy_context(iscsi);
 

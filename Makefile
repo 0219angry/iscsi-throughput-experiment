@@ -5,13 +5,13 @@ CC = gcc
 CFLAGS = -Wall -Wextra -O2 -Iinclude
 
 # link options
-LDFLAGS = -Llib -lm
+LDFLAGS = -Llibs -Wl,-rpath=\$$ORIGIN/../libs -lm -liscsi
 
 # source files (all files in src directory)
 SRC = $(wildcard src/*.c)
 
 # object files
-OBJ = $(patsubst)
+OBJ = $(patsubst src/%.c, obj/%.o, $(SRC))
 
 # executable file
 TARGET = bin/program
