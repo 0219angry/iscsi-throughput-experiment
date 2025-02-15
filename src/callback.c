@@ -23,6 +23,7 @@ void discoveryconnect_cb(struct iscsi_context *iscsi, int status, void *command_
 
   if (status != 0) {
     LOG("discoveryconnect_cb: connection failed : %s",iscsi_get_error(iscsi));
+		exit(EXIT_FAILURE);
   }
 
   LOG("connected, send login command");
@@ -107,7 +108,7 @@ void discoverylogout_cb(struct iscsi_context *iscsi, int status, void *command_d
 		LOG("Failed to set target name");
 		exit(EXIT_FAILURE);
 	}
-	if (iscsi_set_alias(iscsi, "client01") != 0) {
+	if (iscsi_set_alias(iscsi, clnt->creds.alias) != 0) {
 		LOG("Failed to add alias");
 		exit(EXIT_FAILURE);
 	}
@@ -125,7 +126,67 @@ void discoverylogout_cb(struct iscsi_context *iscsi, int status, void *command_d
 void normalconnect_cb(struct iscsi_context *iscsi, int status, void *command_data, void *private_data)
 {
   UNUSED(command_data);
+	struct client_state *clnt = (struct client_state *)private_data;
+	LOG("Connected to iscsi socket");
 
-  LOG("reach normalconnect_cb");
+	if (status != 0) {
+		printf("Connection failed status: %d", status);
+	}
+
+	LOG("Connected, send login command");
+
+	if (iscsi_set_header_digest(iscsi, ISCSI_HEADER_DIGEST_CRC32C_NONE) != 0) {
+		LOG("Failed to set header digest to normal");
+		exit(EXIT_FAILURE);
+	}
+
+	if (iscsi_set_target_username_pwd(iscsi, clnt->creds.username, clnt->creds.password) != 0) {
+		LOG("Failed to set auth");
+		exit(EXIT_FAILURE);
+	}
+	if (iscsi_login_async(iscsi, normallogin_cb, private_data) != 0) {
+		LOG("iscsi_login_async failed : %s", iscsi_get_error(iscsi));
+		exit(EXIT_FAILURE);
+	}
+}
+
+void normallogin_cb(struct iscsi_context *iscsi, int status, void *command_data, void *private_data)
+{
+	UNUSED(command_data);
+
+	struct client_state *clnt = (struct client_state *)private_data;
+
+	if (status != 0) {
+		LOG("Failed to log in to target. : %s", iscsi_get_error(iscsi));
+		exit(EXIT_FAILURE);
+	}
+
+	LOG("Logged in normal session, send reportluns");
+	if (iscsi_reportluns_task(iscsi, 0, 16, reportluns_cb, private_data) == NULL) {
+		printf("failed to send reportluns command : %s", iscsi_get_error(iscsi));
+		exit(EXIT_FAILURE);
+	}
+}
+
+void reportluns_cb(struct iscsi_context *iscsi, int status, void *command_data, void *private_data)
+{
+	struct scsi_task *task = command_data;
+	struct scsi_reportluns_list *list;
+	int full_report_size;
+	int i;
+
+	struct client_state *clnt = (struct client_state *)private_data;
+
+	if (status != SCSI_STATUS_GOOD) {
+		LOG("Failed to reportluns with : %s", iscsi_get_error(iscsi));
+		exit(EXIT_FAILURE);
+	}
+
+	full_report_size = scsi_datain_getfullsize(task);
+
+	LOG("REPORTLUNS datasize %d", task->datain.size);
+	LOG("REPORTLUNS status %d", status);
+	LOG("REPORTLUNS full report luns data size %d", full_report_size);
+
 }
 

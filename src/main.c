@@ -16,13 +16,12 @@
 #include "log.h"
 #define UNUSED(x) ((void)x)
 
-#define IQN_CLIENT "iqn.2025-02.local:client01"
-
-#define TARGET "192.168.0.26:3260"
-
+#define IQN_CLIENT "iqn.2025-02.com.example:client01"
+#define ALIAS_CLIENT "client01"
 
 
 int main(int argc, char const *argv[]) {
+  LOG("Start iscsi throughput experiments");
   UNUSED(argc);
   UNUSED(argv);
 
@@ -32,13 +31,15 @@ int main(int argc, char const *argv[]) {
 
   memset(&clnt, 0, sizeof(clnt));
 
+  read_credentials(&clnt.creds);
+
   iscsi = iscsi_create_context(IQN_CLIENT);
   if (iscsi == NULL) {
     LOG("Failed to create context: %s",IQN_CLIENT);
     exit(EXIT_FAILURE);
   }
 
-  if (iscsi_set_alias(iscsi, "client01") != 0) {
+  if (iscsi_set_alias(iscsi, ALIAS_CLIENT) != 0) {
     LOG("Failed to set alias: %s", iscsi->initiator_name);
     exit(EXIT_FAILURE);
   }
@@ -47,7 +48,7 @@ int main(int argc, char const *argv[]) {
 
   clnt.message = "iSCSI throughput test";
   clnt.has_discovered_target = 0;
-  if (iscsi_connect_async(iscsi, TARGET, discoveryconnect_cb, &clnt) != 0) {
+  if (iscsi_connect_async(iscsi, clnt.creds.portal, discoveryconnect_cb, &clnt) != 0) {
     LOG("iSCSI failed to connect. %s",iscsi_get_error(iscsi));
     exit(EXIT_FAILURE);
   }
