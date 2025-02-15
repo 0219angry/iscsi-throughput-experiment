@@ -1,3 +1,4 @@
 /obj
 /bin
 /libs/*.so*
+credentials.conf

@@ -14,9 +14,16 @@ enum client_state_type {
        STATE_DONE
 };
 
+struct credentials {
+       const char *alias;
+       const char *portal;
+       const char *username;
+       const char *password;
+};
 struct client_state {
        int finished;
        enum client_state_type state;
+       struct credentials creds;
        const char *message;
        int has_discovered_target;
        char *target_name;
@@ -26,6 +33,8 @@ struct client_state {
 };
 
 
+     
+void read_credentials(struct credentials *creds);
 void generate_write_tasks(struct iscsi_context *iscsi, void *private_data);
 
 
