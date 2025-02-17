@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include <poll.h>
 
@@ -22,8 +23,8 @@
 
 int main(int argc, char const *argv[]) {
   LOG("Start iscsi throughput experiments");
-  UNUSED(argc);
-  UNUSED(argv);
+
+  signal(SIGINT, signal_handler);
 
   struct iscsi_context *iscsi;
   struct pollfd pfd;
@@ -31,17 +32,31 @@ int main(int argc, char const *argv[]) {
 
   memset(&clnt, 0, sizeof(clnt));
 
+  if (argc != 2) {
+    LOG("Usage: %s", argv[0]);
+    exit(EXIT_FAILURE);
+  }
+  clnt.write_data_size = parse_size(argv[1]);
+  if (clnt.write_data_size < 0) {
+    LOG("Invalid write data size: %s", argv[1]);
+    exit(EXIT_FAILURE);
+  }
+
   read_credentials(&clnt.creds);
 
   iscsi = iscsi_create_context(IQN_CLIENT);
   if (iscsi == NULL) {
     LOG("Failed to create context: %s",IQN_CLIENT);
     exit(EXIT_FAILURE);
+  } else {
+    LOG("Created context: %s",IQN_CLIENT);
   }
 
   if (iscsi_set_alias(iscsi, ALIAS_CLIENT) != 0) {
     LOG("Failed to set alias: %s", iscsi->initiator_name);
     exit(EXIT_FAILURE);
+  } else {
+    LOG("Set alias: %s", iscsi->alias);
   }
 
   clnt.state = STATE_INIT;
@@ -57,7 +72,7 @@ int main(int argc, char const *argv[]) {
 
 
   // loop for writing
-  while (clnt.state != STATE_DONE) {
+  while (clnt.finished == 0) {
     pfd.fd = iscsi_get_fd(iscsi);
     pfd.events = iscsi_which_events(iscsi);
 
@@ -70,7 +85,9 @@ int main(int argc, char const *argv[]) {
       LOG("iscsi_service failed with : %s", iscsi_get_error(iscsi));
       break;
     }
+
   }
+
   // free resources
 	iscsi_destroy_context(iscsi);
 
