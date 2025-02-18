@@ -37,8 +37,8 @@ struct client_state {
        int all_write_task_count;
        int completed_write_task_count;
        int generated_write_task_count;
-       struct timeval write_start_time;
-       struct timeval write_end_time;
+       struct timespec write_start_time;
+       struct timespec write_end_time;
        pthread_mutex_t mutex;
 };
 

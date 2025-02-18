@@ -1,9 +1,12 @@
+#define _POSIX_C_SOURCE 199309L
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/time.h>
+#include <time.h>
 
 #include <poll.h>
 
@@ -385,7 +388,7 @@ void readcapacity10_cb(struct iscsi_context *iscsi, int status, void *command_da
 	}
 
 	LOG("Generate write tasks. %d bytes.", clnt->write_data_size);
-	gettimeofday(&clnt->write_start_time, NULL);
+	clock_gettime(CLOCK_REALTIME, &clnt->write_start_time);
 
 	clnt->all_write_task_count = clnt->write_data_size / 512;
 	pthread_mutex_lock(&clnt->mutex);
@@ -461,9 +464,15 @@ void write10_cb(struct iscsi_context *iscsi, int status, void *command_data, voi
 	
 	// all write tasks are completed
 	if(clnt->completed_write_task_count == clnt->all_write_task_count) {
-		gettimeofday(&clnt->write_end_time, NULL);
+		clock_gettime(CLOCK_REALTIME, &clnt->write_end_time);
 		LOG("Write10 successful");
-		LOG("Elapsed time: %ld.%06ld", clnt->write_end_time.tv_sec - clnt->write_start_time.tv_sec, clnt->write_end_time.tv_usec - clnt->write_start_time.tv_usec);
+		if(clnt->write_end_time.tv_nsec < clnt->write_start_time.tv_nsec) {
+			clnt->write_end_time.tv_sec--;
+			clnt->write_end_time.tv_nsec += 1000000000;
+		}
+		LOG("Elapsed time: %ld.%09ld", \
+			clnt->write_end_time.tv_sec - clnt->write_start_time.tv_sec, \
+			clnt->write_end_time.tv_nsec - clnt->write_start_time.tv_nsec);
 		scsi_free_scsi_task(task);
 		clnt->finished = 1;
 	}
