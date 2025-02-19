@@ -45,7 +45,12 @@ struct client_state {
 
 int parse_size(const char *str);
 void read_credentials(struct credentials *creds);
-void generate_write_tasks(struct iscsi_context *iscsi, void *private_data);
+void generate_write_tasks(struct iscsi_context *iscsi, struct client_state *clnt, unsigned char *data, iscsi_command_cb cb, void *private_data);
 void signal_handler(int sig);
+unsigned char *prepare_write_data(int size);
+
+void set_start_time(struct client_state *clnt);
+void set_end_time(struct client_state *clnt);
+void stats_traker(struct client_state *clnt);
 
 #endif

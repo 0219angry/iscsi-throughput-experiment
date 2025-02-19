@@ -376,38 +376,18 @@ void readcapacity10_cb(struct iscsi_context *iscsi, int status, void *command_da
 
 	scsi_free_scsi_task(task);
 
-	unsigned char *data = malloc((int)iscsi->target_max_recv_data_segment_length);
-	LOG("MAX_RECV_DATA_SEGMENT_LENGTH: %d", (int)iscsi->target_max_recv_data_segment_length);
-	if (data == NULL) {
-		LOG("Failed to allocate memory for data");
-		exit(EXIT_FAILURE);
-	}
-
-	for (i = 0; i < (int)iscsi->target_max_recv_data_segment_length; i++) {
-		data[i] = i & 0xff;
-	}
-
+	set_start_time(clnt);
+	LOG("Start write10 tasks");
+	unsigned char *data = prepare_write_data(iscsi->target_max_recv_data_segment_length);
 	LOG("Generate write tasks. %d bytes.", clnt->write_data_size);
-	clock_gettime(CLOCK_REALTIME, &clnt->write_start_time);
+	LOG("MAX_RECV_DATA_SEGMENT_LENGTH: %d", (int)iscsi->target_max_recv_data_segment_length);
 
-	clnt->all_write_task_count = clnt->write_data_size / 512;
+	clnt->all_write_task_count = clnt->write_data_size / clnt->block_size;
 	pthread_mutex_lock(&clnt->mutex);
 	clnt->completed_write_task_count = 0;
 	pthread_mutex_unlock(&clnt->mutex);
 
-	for (int i = 0; i < (int)iscsi->target_max_recv_data_segment_length; i += 512) {
-		task = iscsi_write10_task(iscsi, clnt->lun, i / 512, data + i, 512, 512, 0, 0, 0, 1, 0, write10_cb, private_data);
-		clnt->generated_write_task_count++;	
-		LOG("GENERATE WRITE TASK %d", clnt->generated_write_task_count);
-		if (task == NULL) {
-				LOG("Failed to send write10 command at offset %d", i);
-				free(data);
-				exit(EXIT_FAILURE);
-		}
-		if (clnt->generated_write_task_count == clnt->all_write_task_count) {
-			break;
-		}
-	}
+	generate_write_tasks(iscsi, clnt, data, write10_cb, private_data);
 
 	free(data);
 }
@@ -429,50 +409,22 @@ void write10_cb(struct iscsi_context *iscsi, int status, void *command_data, voi
 	}
 
 	pthread_mutex_lock(&clnt->mutex);
-	clnt->completed_write_task_count++;
+	clnt->completed_write_task_count = clnt->generated_write_task_count;
 	pthread_mutex_unlock(&clnt->mutex);
 	
 	LOG("Command Sequence Number: %d(%d/%d)",task->cmdsn, clnt->completed_write_task_count, clnt->all_write_task_count);
 	
 	// genrate next write tasks
 	if (clnt->completed_write_task_count == clnt->generated_write_task_count && clnt->generated_write_task_count < clnt->all_write_task_count) {
-		unsigned char *data = malloc(iscsi->target_max_recv_data_segment_length);
-		if (data == NULL) {
-			LOG("Failed to allocate memory for data");
-			exit(EXIT_FAILURE);
-		}
-	
-		for (i = 0; i < (int)iscsi->target_max_recv_data_segment_length; i++) {
-			data[i] = i & 0xff;
-		}
-
-		for (int i = 0; i < (int)iscsi->target_max_recv_data_segment_length; i += 512) {
-			task = iscsi_write10_task(iscsi, clnt->lun, clnt->generated_write_task_count, data + clnt->generated_write_task_count * 512, 512, 512, 0, 0, 0, 1, 0, write10_cb, private_data);
-			clnt->generated_write_task_count++;	
-			LOG("GENERATE WRITE TASK %d", clnt->generated_write_task_count);
-			if (task == NULL) {
-					LOG("Failed to send write10 command at offset %d", i);
-					free(data);
-					exit(EXIT_FAILURE);
-			}
-			if (clnt->generated_write_task_count == clnt->all_write_task_count) {
-				break;
-			}
-		}
-
+		unsigned char *data = prepare_write_data(iscsi->target_max_recv_data_segment_length);
+		generate_write_tasks(iscsi, clnt, data, write10_cb, private_data);
+		free(data);
 	}
 	
 	// all write tasks are completed
 	if(clnt->completed_write_task_count == clnt->all_write_task_count) {
-		clock_gettime(CLOCK_REALTIME, &clnt->write_end_time);
-		LOG("Write10 successful");
-		if(clnt->write_end_time.tv_nsec < clnt->write_start_time.tv_nsec) {
-			clnt->write_end_time.tv_sec--;
-			clnt->write_end_time.tv_nsec += 1000000000;
-		}
-		LOG("Elapsed time: %ld.%09ld", \
-			clnt->write_end_time.tv_sec - clnt->write_start_time.tv_sec, \
-			clnt->write_end_time.tv_nsec - clnt->write_start_time.tv_nsec);
+		set_end_time(clnt);
+		stats_tracker(clnt);
 		scsi_free_scsi_task(task);
 		clnt->finished = 1;
 	}
