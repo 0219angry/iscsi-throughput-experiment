@@ -18,8 +18,8 @@
 #define UNUSED(x) ((void)x)
 
 #define KB 1024
-#define MB 1024 * KB
-#define GB 1024 * MB
+#define MB (1024 * KB)
+#define GB (1024 * MB)
 
 int parse_size(const char *str)
 {
@@ -88,8 +88,8 @@ void generate_write_tasks(struct iscsi_context *iscsi, struct client_state *clnt
     clnt->block_size,
     0, 0, 1, 0, 0, cb, private_data);
   
-  LOG("GENERATE WRITE TASK. LBA: %-5d block count: %-5d", clnt->lba, data_length / clnt->block_size);
-  clnt->lba = clnt->lba + data_length / clnt->block_size;
+  LOG("GENERATE WRITE TASK[%-4d/%-4d]. LBA: %-5d block count: %-5d",clnt->lba/clnt->block_size+1, clnt->write_data_size/iscsi->target_max_recv_data_segment_length, clnt->lba, data_length / clnt->block_size);
+  clnt->lba = clnt->lba + (data_length / clnt->block_size);
   
   
   if (task == NULL) {
@@ -143,8 +143,8 @@ unsigned char *prepare_write_data(int size) {
   }
 
   for (int i = 0; i < size; i++) {
-      data[i] = i & 0xff;
-  }
+    data[i] = (i % (126 - 32)) + 33;
+}
 
   return data;
 }
@@ -163,7 +163,8 @@ void stats_tracker(struct client_state *clnt) {
     clnt->write_end_time.tv_sec--;
     clnt->write_end_time.tv_nsec += 1000000000;
   }
-  LOG("Elapsed time: %ld.%09ld", \
-    clnt->write_end_time.tv_sec - clnt->write_start_time.tv_sec, \
-    clnt->write_end_time.tv_nsec - clnt->write_start_time.tv_nsec);
+  double elapsed_time = (double)(clnt->write_end_time.tv_sec - clnt->write_start_time.tv_sec) + (double)(clnt->write_end_time.tv_nsec - clnt->write_start_time.tv_nsec) / 1000000000;
+  LOG("Elapsed time: %f sec", elapsed_time);
+  LOG("Write data size: %.2f MB", (double)clnt->write_data_size / MB);
+  LOG("Overall write speed: %f MB/s", (double)(clnt->write_data_size / MB) / elapsed_time);
 }
