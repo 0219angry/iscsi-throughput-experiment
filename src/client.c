@@ -77,24 +77,46 @@ void read_credentials(struct credentials *creds)
   LOG("Credentials read successfully");
 }
 
-void generate_write_tasks(struct iscsi_context *iscsi, struct client_state *clnt, unsigned char *data, iscsi_command_cb cb, void *private_data) {
-  int max_segment = (int)iscsi->target_max_recv_data_segment_length;
+void generate_write_tasks(struct iscsi_context *iscsi, struct client_state *clnt, iscsi_command_cb cb, void *private_data) {
+  int data_length = (int)iscsi->target_max_recv_data_segment_length;
 
-  for (int i = 0; i < clnt->write_data_size; i += max_segment) {
-      struct scsi_task *task = iscsi_write10_task(iscsi, clnt->lun, i / clnt->block_size, data + i, max_segment, max_segment, 0, 0, 0, 1, 0, cb, private_data);
-      clnt->generated_write_task_count ++;
-      LOG("GENERATE WRITE TASK %d", clnt->generated_write_task_count);
-      
-      if (task == NULL) {
-          LOG("Failed to send write10 command at offset %d", i);
-          free(data);
-          exit(EXIT_FAILURE);
-      }
-
-      if (clnt->generated_write_task_count == clnt->all_write_task_count) {
-          break;
-      }
+  struct scsi_task *task = iscsi_write10_task(iscsi, 
+    clnt->lun, 
+    clnt->lba,
+    clnt->buf,
+    clnt->bufsize,
+    clnt->block_size,
+    0, 0, 1, 0, 0, cb, private_data);
+  
+  LOG("GENERATE WRITE TASK. LBA: %-5d block count: %-5d", clnt->lba, data_length / clnt->block_size);
+  clnt->lba = clnt->lba + data_length / clnt->block_size;
+  
+  
+  if (task == NULL) {
+      LOG("Failed to send write10 command.");
+      LOG("Error: %s", iscsi_get_error(iscsi));
+      free(clnt->buf);
+      exit(EXIT_FAILURE);
   }
+}
+
+/*
+
+*/
+void write_command(struct iscsi_context *iscsi, struct client_state *clnt, iscsi_command_cb cb, void *private_data) {
+  int data_size = clnt->write_data_size - clnt->completed_write_data_length;
+  if (data_size > (int)iscsi->target_max_recv_data_segment_length) {
+    data_size = (int)iscsi->target_max_recv_data_segment_length;
+  }
+  if(clnt->buf != NULL) {
+    free(clnt->buf);
+  }
+  unsigned char *data = prepare_write_data(data_size);
+  clnt->generated_write_data_length += data_size;
+  clnt->buf = data;
+  clnt->bufsize = data_size;
+  generate_write_tasks(iscsi, clnt, cb, private_data);
+
 }
 
 void signal_handler(int sig) {
@@ -135,7 +157,7 @@ void set_end_time(struct client_state *clnt) {
   clock_gettime(CLOCK_REALTIME, &clnt->write_end_time);
 }
 
-void stats_traker(struct client_state *clnt) {
+void stats_tracker(struct client_state *clnt) {
   LOG("Write10 successful");
   if(clnt->write_end_time.tv_nsec < clnt->write_start_time.tv_nsec) {
     clnt->write_end_time.tv_sec--;

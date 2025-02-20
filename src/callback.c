@@ -342,7 +342,6 @@ void readcapacity10_cb(struct iscsi_context *iscsi, int status, void *command_da
 	struct client_state *clnt = (struct client_state *)private_data;
 	int full_size;
 
-	int i;
 
 	if (status == SCSI_STATUS_CHECK_CONDITION) {
 		LOG("Readcapacity10 failed with sense key:%d ascq:%04x", task->sense.key, task->sense.ascq);
@@ -369,6 +368,7 @@ void readcapacity10_cb(struct iscsi_context *iscsi, int status, void *command_da
 	}
 
 	clnt->block_size = rc10->block_size;
+	clnt->lba = 0;
 	LOG("READCAPACITY10 successful.");
 	LOG("  LBA       : %d",rc10->lba);
 	LOG("  Block size: %d", rc10->block_size);
@@ -376,20 +376,11 @@ void readcapacity10_cb(struct iscsi_context *iscsi, int status, void *command_da
 
 	scsi_free_scsi_task(task);
 
+	// start send data
 	set_start_time(clnt);
 	LOG("Start write10 tasks");
-	unsigned char *data = prepare_write_data(iscsi->target_max_recv_data_segment_length);
-	LOG("Generate write tasks. %d bytes.", clnt->write_data_size);
-	LOG("MAX_RECV_DATA_SEGMENT_LENGTH: %d", (int)iscsi->target_max_recv_data_segment_length);
-
-	clnt->all_write_task_count = clnt->write_data_size / clnt->block_size;
-	pthread_mutex_lock(&clnt->mutex);
-	clnt->completed_write_task_count = 0;
-	pthread_mutex_unlock(&clnt->mutex);
-
-	generate_write_tasks(iscsi, clnt, data, write10_cb, private_data);
-
-	free(data);
+	clnt->completed_write_data_length = 0;
+	write_command(iscsi, clnt, write10_cb, private_data);
 }
 
 void write10_cb(struct iscsi_context *iscsi, int status, void *command_data, void *private_data)
@@ -397,7 +388,6 @@ void write10_cb(struct iscsi_context *iscsi, int status, void *command_data, voi
 	UNUSED(iscsi);
 	struct scsi_task *task = command_data;
 	struct client_state *clnt = (struct client_state *)private_data;
-	int i;
 
 	if (status == SCSI_STATUS_CHECK_CONDITION) {
 		LOG("Write10 failed with sense key:%d ascq:%04x", task->sense.key, task->sense.ascq);
@@ -405,27 +395,18 @@ void write10_cb(struct iscsi_context *iscsi, int status, void *command_data, voi
 	}
 	if (status != SCSI_STATUS_GOOD) {
 		LOG("Write10 failed with status:%d", status);
+		LOG("Error: %s", iscsi_get_error(iscsi));
 		exit(EXIT_FAILURE);
 	}
 
-	pthread_mutex_lock(&clnt->mutex);
-	clnt->completed_write_task_count = clnt->generated_write_task_count;
-	pthread_mutex_unlock(&clnt->mutex);
-	
-	LOG("Command Sequence Number: %d(%d/%d)",task->cmdsn, clnt->completed_write_task_count, clnt->all_write_task_count);
-	
-	// genrate next write tasks
-	if (clnt->completed_write_task_count == clnt->generated_write_task_count && clnt->generated_write_task_count < clnt->all_write_task_count) {
-		unsigned char *data = prepare_write_data(iscsi->target_max_recv_data_segment_length);
-		generate_write_tasks(iscsi, clnt, data, write10_cb, private_data);
-		free(data);
-	}
-	
+	clnt->completed_write_data_length = clnt->generated_write_data_length;
 	// all write tasks are completed
-	if(clnt->completed_write_task_count == clnt->all_write_task_count) {
+	if(clnt->completed_write_data_length == clnt->write_data_size) {
 		set_end_time(clnt);
 		stats_tracker(clnt);
 		scsi_free_scsi_task(task);
 		clnt->finished = 1;
+		return;
 	}
+	write_command(iscsi, clnt, write10_cb, private_data);
 }

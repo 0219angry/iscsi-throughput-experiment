@@ -32,11 +32,13 @@ struct client_state {
        int has_discovered_target;
        char *target_name;
        char *target_address;
+       int bufsize;
+       unsigned char *buf;
        int lun;
+       int lba;
        int block_size;
-       int all_write_task_count;
-       int completed_write_task_count;
-       int generated_write_task_count;
+       int completed_write_data_length;
+       int generated_write_data_length;
        struct timespec write_start_time;
        struct timespec write_end_time;
        pthread_mutex_t mutex;
@@ -45,12 +47,13 @@ struct client_state {
 
 int parse_size(const char *str);
 void read_credentials(struct credentials *creds);
-void generate_write_tasks(struct iscsi_context *iscsi, struct client_state *clnt, unsigned char *data, iscsi_command_cb cb, void *private_data);
+void write_command(struct iscsi_context *iscsi, struct client_state *clnt, iscsi_command_cb cb, void *private_data);
+void generate_write_tasks(struct iscsi_context *iscsi, struct client_state *clnt, iscsi_command_cb cb, void *private_data);
 void signal_handler(int sig);
 unsigned char *prepare_write_data(int size);
 
 void set_start_time(struct client_state *clnt);
 void set_end_time(struct client_state *clnt);
-void stats_traker(struct client_state *clnt);
+void stats_tracker(struct client_state *clnt);
 
 #endif
