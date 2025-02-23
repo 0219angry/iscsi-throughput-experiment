@@ -88,7 +88,7 @@ void generate_write_tasks(struct iscsi_context *iscsi, struct client_state *clnt
     clnt->block_size,
     0, 0, 1, 0, 0, cb, private_data);
   
-  LOG("GENERATE WRITE TASK[%-4d/%-4d]. LBA: %-5d block count: %-5d",clnt->lba/clnt->block_size+1, clnt->write_data_size/iscsi->target_max_recv_data_segment_length, clnt->lba, data_length / clnt->block_size);
+  LOG("GENERATE WRITE TASK[%4d/%4d]. LBA: %8d block count: %5d",clnt->lba/clnt->block_size+1, clnt->write_data_size/iscsi->target_max_recv_data_segment_length, clnt->lba, data_length / clnt->block_size);
   clnt->lba = clnt->lba + (data_length / clnt->block_size);
   
   
