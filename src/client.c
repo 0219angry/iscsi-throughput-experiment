@@ -86,9 +86,10 @@ void generate_write_tasks(struct iscsi_context *iscsi, struct client_state *clnt
     clnt->buf,
     clnt->bufsize,
     clnt->block_size,
-    0, 0, 1, 0, 0, cb, private_data);
+    0, 0, 1, 1, 0, cb, private_data);
   
-  LOG("GENERATE WRITE TASK[%4d/%4d]. LBA: %8d block count: %5d",clnt->lba/clnt->block_size+1, clnt->write_data_size/iscsi->target_max_recv_data_segment_length, clnt->lba, data_length / clnt->block_size);
+  print_progress_bar(clnt->generated_write_data_length, clnt->write_data_size);
+  
   clnt->lba = clnt->lba + (data_length / clnt->block_size);
   
   
@@ -158,6 +159,14 @@ void set_end_time(struct client_state *clnt) {
 }
 
 void stats_tracker(struct client_state *clnt) {
+  
+  time_t t = time(NULL);
+  struct tm *tm_info = localtime(&t);
+  char date_buf[11];
+  char time_buf[9];
+  strftime(date_buf, sizeof(date_buf), "%Y-%m-%d", tm_info);
+  strftime(time_buf, sizeof(time_buf), "%H:%M:%S", tm_info);
+
   LOG("Write10 successful");
   if(clnt->write_end_time.tv_nsec < clnt->write_start_time.tv_nsec) {
     clnt->write_end_time.tv_sec--;
@@ -167,4 +176,63 @@ void stats_tracker(struct client_state *clnt) {
   LOG("Elapsed time: %f sec", elapsed_time);
   LOG("Write data size: %.2f MB", (double)clnt->write_data_size / MB);
   LOG("Overall write speed: %f MB/s", (double)(clnt->write_data_size / MB) / elapsed_time);
+
+  // append log file
+  fprintf(clnt->logfilep, "%s, %s, %d, %f, %f, %s, %s\n",
+    date_buf,
+    time_buf,
+    clnt->write_data_size,
+    elapsed_time,
+    (double)(clnt->write_data_size / MB) / elapsed_time,
+    clnt->target_network_stress,
+    clnt->comments
+  );
+
+}
+
+FILE *create_logfile() {
+  FILE *file = fopen("log/log.csv", "r");
+
+  char header[] = "date, time, write_data_size[B], elapsed_time[s], write_throghput[MB/s], target_network_stress[MB/s], comments\n";
+  if (!file) {
+    file = fopen("log/log.csv", "a");
+    if (!file) {
+      LOG("Failed to create log file");
+      exit(EXIT_FAILURE);
+    }
+    fprintf(file, "%s", header);
+    LOG("Log file created successfully");
+    return file;
+  }
+  LOG("Log file already exists");
+  return file;
+}
+
+void print_progress_bar(int progress, int total) {
+  int bar_width = 70;
+  float progress_ratio = (float)progress / total;
+  int pos = bar_width * progress_ratio;
+
+  time_t t = time(NULL);
+  struct tm *tm_info = localtime(&t);
+  char time_buf[20];
+  strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", tm_info);
+
+  printf("\r%s [", time_buf);
+  
+  for (int i = 0; i < bar_width; i++) {
+    if (i < pos) {
+      printf("=");
+    } else if (i == pos) {
+      printf(">");
+    } else {
+      printf(" ");
+    }
+  }
+  printf("] %d%%", (int)(progress_ratio * 100));
+  if (progress == total) {
+    printf("\n");
+  }
+
+  fflush(stdout);
 }

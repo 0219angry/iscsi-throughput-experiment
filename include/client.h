@@ -27,7 +27,10 @@ struct client_state {
        int finished;
        enum client_state_type state;
        struct credentials creds;
+       FILE *logfilep;
        const char *message;
+       const char *target_network_stress;
+       const char *comments;
        int write_data_size;
        int has_discovered_target;
        char *target_name;
@@ -55,5 +58,7 @@ unsigned char *prepare_write_data(int size);
 void set_start_time(struct client_state *clnt);
 void set_end_time(struct client_state *clnt);
 void stats_tracker(struct client_state *clnt);
+void print_progress_bar(int progress, int total);
+FILE *create_logfile();
 
 #endif
