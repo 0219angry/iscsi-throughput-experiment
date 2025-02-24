@@ -13,6 +13,7 @@
 
 #include "client.h"
 #include "callback.h"
+#include "iteration.h"
 
 #include "log.h"
 #define UNUSED(x) ((void)x)
@@ -26,19 +27,17 @@ int main(int argc, char const *argv[]) {
 
   signal(SIGINT, signal_handler);
 
-  struct iscsi_context *iscsi;
-  struct pollfd pfd;
   struct client_state clnt;
 
   memset(&clnt, 0, sizeof(clnt));
 
-  if (argc < 4 && argc > 5) {
+  if (argc < 4 || argc > 5) {
     LOG("Usage: %s", argv[0]);
     LOG("%s <test count> <write data size> <target network stress> (<comments>)", argv[0]);
     exit(EXIT_FAILURE);
   }
-  char *endptr;
-  int test_count = strtol(argv[1], endptr, 10);
+  char *endptr = NULL;
+  int test_count = strtol(argv[1], &endptr, 10);
   if (*endptr != '\0') {
     LOG("Invalid test count: %s", argv[1]);
     exit(EXIT_FAILURE);
@@ -66,59 +65,13 @@ int main(int argc, char const *argv[]) {
 
   clnt.logfilep = create_logfile();
 
-  iscsi = iscsi_create_context(IQN_CLIENT);
-  if (iscsi == NULL) {
-    LOG("Failed to create context: %s",IQN_CLIENT);
-    exit(EXIT_FAILURE);
-  } else {
-    LOG("Created context: %s",IQN_CLIENT);
+  struct client_state default_clnt;
+  memcpy(&default_clnt, &clnt, sizeof(clnt));
+
+  for (int i = 0; i < test_count; i++) {
+    memcpy(&clnt, &default_clnt, sizeof(clnt));
+    connect_and_test_iscsi(&clnt);
   }
-
-  if (iscsi_set_alias(iscsi, ALIAS_CLIENT) != 0) {
-    LOG("Failed to set alias: %s", iscsi->initiator_name);
-    exit(EXIT_FAILURE);
-  } else {
-    LOG("Set alias: %s", iscsi->alias);
-  }
-
-  clnt.state = STATE_INIT;
-
-  clnt.message = "iSCSI throughput test";
-  clnt.has_discovered_target = 0;
-  if (iscsi_connect_async(iscsi, clnt.creds.portal, discoveryconnect_cb, &clnt) != 0) {
-    LOG("iSCSI failed to connect. %s",iscsi_get_error(iscsi));
-    exit(EXIT_FAILURE);
-  }
-
-  clnt.state = STATE_CONNECTING;
-
-
-  // loop for writing
-  while (clnt.finished == 0) {
-    pfd.fd = iscsi_get_fd(iscsi);
-    pfd.events = iscsi_which_events(iscsi);
-
-    if (poll(&pfd, 1, -1) < 0) {
-      LOG("Poll failed.");
-      exit(EXIT_FAILURE);
-    }
-
-    if(iscsi_service(iscsi, pfd.events) < 0) {
-      LOG("iscsi_service failed with : %s", iscsi_get_error(iscsi));
-      break;
-    }
-
-  }
-
-  // free resources
-	iscsi_destroy_context(iscsi);
-
-	if (clnt.target_name != NULL) {
-		free(clnt.target_name);
-	}
-	if (clnt.target_address != NULL) {
-		free(clnt.target_address);
-	}
 
   exit(EXIT_SUCCESS);
 }

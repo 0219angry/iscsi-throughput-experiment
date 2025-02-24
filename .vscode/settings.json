@@ -6,6 +6,7 @@
     "iscsi-private.h": "c",
     "log.h": "c",
     "stdint.h": "c",
-    "poll.h": "c"
+    "poll.h": "c",
+    "iteration.h": "c"
   }
 }

@@ -178,7 +178,7 @@ void stats_tracker(struct client_state *clnt) {
   LOG("Overall write speed: %f MB/s", (double)(clnt->write_data_size / MB) / elapsed_time);
 
   // append log file
-  fprintf(clnt->logfilep, "%s, %s, %d, %f, %f, %s, %s\n",
+  fprintf(clnt->logfilep, "%s, %s, success, %d, %f, %f, %s, %s\n",
     date_buf,
     time_buf,
     clnt->write_data_size,
@@ -191,11 +191,18 @@ void stats_tracker(struct client_state *clnt) {
 }
 
 FILE *create_logfile() {
-  FILE *file = fopen("log/log.csv", "r");
+  time_t t = time(NULL);
+  struct tm *tm_info = localtime(&t);
+  char date_buf[13];
+  char log_file_path[21];
+  strftime(date_buf, sizeof(date_buf), "%Y%m%d%H%M%S", tm_info);
+  sprintf(log_file_path,"log/%s.csv", date_buf);
 
-  char header[] = "date, time, write_data_size[B], elapsed_time[s], write_throghput[MB/s], target_network_stress[MB/s], comments\n";
+  FILE *file = fopen(log_file_path, "r");
+
+  char header[] = "date, time, flag, write_data_size[B], elapsed_time[s], write_throghput[MB/s], target_network_stress[MB/s], comments\n";
   if (!file) {
-    file = fopen("log/log.csv", "a");
+    file = fopen(log_file_path, "a");
     if (!file) {
       LOG("Failed to create log file");
       exit(EXIT_FAILURE);
