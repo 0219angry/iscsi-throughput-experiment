@@ -1,0 +1,3 @@
+date, time, flag, write_data_size[B], elapsed_time[s], write_throghput[MB/s], target_network_stress[MB/s], comments
+2025-03-02, 22:06:48, success, 104857600, 38.376833, 2.605739, 0, no stress
+2025-03-02, 22:07:12, success, 104857600, 24.267382, 4.120758, 0, no stress
